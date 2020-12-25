@@ -1,0 +1,16 @@
+[package]
+name = "gifski_ffmpeg_script"
+version = "0.0.1"
+authors = ["gremious <gremious@protonmail.com>"]
+description = "A `cargo generate` template for quick-starting a rust-script crate"
+keywords = ["template", "script"]
+edition = "2018"
+
+[[bin]]
+name = "script"
+path = "src/script.rs"
+
+[dependencies]
+structopt = "0.3"
+log = "0.4"
+simple_logger = "1.11.0"
