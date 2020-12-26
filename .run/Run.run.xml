@@ -1,7 +1,7 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="Run" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
-    <option name="command" value="run --package gifski_ffmpeg_script --bin script ./src/input.mp4 ./src/output.mp4 --verbose" />
-    <option name="workingDirectory" value="file://$PROJECT_DIR$" />
+    <option name="command" value="run --package gifski_ffmpeg_script --bin script ./input.mp4 ./output.mp4 --verbose" />
+    <option name="workingDirectory" value="file://$PROJECT_DIR$/src" />
     <option name="channel" value="DEFAULT" />
     <option name="allFeatures" value="false" />
     <option name="emulateTerminal" value="false" />

@@ -24,8 +24,6 @@ lazy_static! {
     static ref VERBOSE: RwLock<bool> = RwLock::new(false);
 }
 
-static mut ASD: bool = false;
-
 #[derive(StructOpt, Debug)]
 #[structopt(name = "basic")]
 struct Opt {
@@ -40,53 +38,71 @@ struct Opt {
 	/// Name of output file.
 	#[structopt(name = "OUTPUT")]
 	output: Option<String>,
+
+	/// Quality for gifski.
+	#[structopt(short, long, default_value = "100")]
+	quality: u32,
+
+	/// fps for gifski.
+	#[structopt(short, long, default_value = "50")]
+	fps : u32,
 }
 
 fn main() -> Result<()> {
 	SimpleLogger::new().init().unwrap();
 	let opt: Opt = Opt::from_args();
 	{ *VERBOSE.write().unwrap() = opt.verbose; }
-
+	let file_name =  opt.input.file_stem()?;
 	verbose!("input: {}", &opt.input.display());
-	// verbose!(opt, "output: {}", &opt.output.display());
-
+	verbose!("output: {}", if let Some(o) = &opt.output { o.display() } else { format!("No output specified, using {}", file_name) });
 	let mut frames_dir = opt.input.clone();
 	frames_dir.pop();
 	frames_dir.push(PathBuf::from("frames"));
 	verbose!("frames dir: {}", &frames_dir.display());
-	fs::create_dir(&frames_dir);
 
+	fs::create_dir(&frames_dir);
+	verbose!("Created the frames dir");
+
+	println!("==============================");
 	ffmpeg_command(&opt.input, &frames_dir);
-	log::info!("ffmpeg to frame conversion complete, running gifski");
-	gifski_command(&opt.input, &frames_dir);
+	println!("==============================");
+	gifski_command(opt.quality, &frames_dir);
+	println!("==============================");
 
 	Ok(())
 }
 
 /// ffmpeg -i video.mp4 frame%04d.png
 fn ffmpeg_command(input: &PathBuf, frames_dir: &PathBuf) -> Result<()> {
+	println!("Splitting video into frames.");
 	let command = Command::new("ffmpeg")
 		.arg("-i").arg(format!("{}", &input.display()))
 		.arg(format!("{}/frame%04d.png", &frames_dir.display()))
-		.output()?;
+		.output()
+		.expect("Failed to run the ffmpeg command. Make sure you have ffmpeg and it is accessible.");
 
 	verbose!("stdout: {}", String::from_utf8_lossy(&command.stdout));
 	verbose!("stderr: {}", String::from_utf8_lossy(&command.stderr));
 	if !command.status.success() { anyhow::bail!("Command executed with failing error code: {:#?}", command.status.code().unwrap()); }
+	log::info!("Frame conversion complete");
 	Ok(())
 }
 
 /// gifski -o file.gif frame*.png
-fn gifski_command(input: &PathBuf, frames_dir: &PathBuf) -> Result<()> {
+fn gifski_command(quality: u32, frames_dir: &PathBuf) -> Result<()> {
+	log::info!("Running gifski. This might take a while.");
 	let command = Command::new("./gifski.exe")
-		.arg("-o").arg("output.gif")
+		.arg("--fps").arg("33")
+		.arg("--quality").arg(quality.to_string())
+		.arg("-o").arg("./output.gif")
 		.arg(format!("{}/frame*.png", &frames_dir.display()))
 		.output()
-		.expect("gifski command not recognized.");
+		.expect("Failed to run the gifski command. Make sure you have gifski and it is accessible.");
 
 	verbose!("stdout: {}", String::from_utf8_lossy(&command.stdout));
 	verbose!("stderr: {}", String::from_utf8_lossy(&command.stderr));
 	if !command.status.success() { anyhow::bail!("Command executed with failing error code: {:#?}", command.status.code().unwrap()); }
+	log::info!("gifski complete");
 	Ok(())
 }
 
