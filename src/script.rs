@@ -14,14 +14,17 @@ clippy::all,
 clippy::pedantic,
 )]
 
-use std::{fs, path::PathBuf, process::Command, sync::RwLock};
+use std::{
+	fs,
+	ffi::{OsStr, OsString},
+	path::PathBuf,
+	process::Command,
+	sync::RwLock,
+};
 use structopt::StructOpt;
 use simple_logger::SimpleLogger;
-use anyhow::{Error, Result, bail, ensure};
+use anyhow::Result;
 use regex::Regex;
-use std::borrow::Cow;
-use std::ffi::{OsStr, OsString};
-use std::path::Path;
 
 #[macro_use]
 extern crate lazy_static;
@@ -66,8 +69,8 @@ fn main() -> Result<()> {
 	let mut frames_dir = std::env::temp_dir();
 	frames_dir.push(PathBuf::from("frames"));
 	verbose!("Frames directory: {}", &frames_dir.display());
-	fs::remove_dir_all(&frames_dir);
-	fs::create_dir(&frames_dir);
+	fs::remove_dir_all(&frames_dir)?;
+	fs::create_dir(&frames_dir)?;
 	verbose!("Created frames directory.");
 
 	let output = parse_output(opt.input.clone(), &opt.output, &file_name)?;
@@ -79,7 +82,7 @@ fn main() -> Result<()> {
 	println!("============[gifski]============");
 	gifski_command(opt.quality, fps, &frames_dir, output)?;
 	println!("============[Cleaning Up]============");
-	fs::remove_dir_all(&frames_dir);
+	fs::remove_dir_all(&frames_dir)?;
 	verbose!("Deleted frames directory: {}.", if frames_dir.exists() { "failed" } else { "success" });
 	println!("============[Complete!]============");
 
@@ -158,7 +161,7 @@ fn parse_output(input: PathBuf, output: &Option<OsString>, file_name: &OsStr) ->
 		curr.push(name);
 		curr.set_extension("gif");
 		Ok(curr)
-	}
+	};
 }
 
 #[macro_export]
