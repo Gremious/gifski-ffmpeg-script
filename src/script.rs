@@ -20,6 +20,8 @@ use simple_logger::SimpleLogger;
 use anyhow::{Error, Result, bail, ensure};
 use regex::Regex;
 use std::borrow::Cow;
+use std::ffi::{OsStr, OsString};
+use std::path::Path;
 
 #[macro_use]
 extern crate lazy_static;
@@ -40,8 +42,8 @@ struct Opt {
 	input: PathBuf,
 
 	/// Name of output file.
-	#[structopt(name = "OUTPUT")]
-	output: Option<String>,
+	#[structopt(name = "OUTPUT", parse(from_os_str))]
+	output: Option<OsString>,
 
 	/// Quality for gifski.
 	#[structopt(short, long, default_value = "100")]
@@ -56,35 +58,32 @@ fn main() -> Result<()> {
 	SimpleLogger::new().init().unwrap();
 	let opt: Opt = Opt::from_args();
 	{ *VERBOSE.write().unwrap() = opt.verbose; }
+
 	let file_name = opt.input.file_stem().expect("No input file specified.");
 	verbose!("input: {}", &opt.input.display());
-	verbose!("output: {}", if let Some(o) = &opt.output { o.clone() } else { format!("No output specified, using {:?}", file_name) });
+	verbose!("output: {}", if let Some(o) = &opt.output { format!("{:?}", &o) } else { format!("No output specified, using {:?}", file_name) });
+
 	let mut frames_dir = std::env::temp_dir();
 	frames_dir.push(PathBuf::from("frames"));
 	verbose!("Frames directory: {}", &frames_dir.display());
-
 	fs::remove_dir_all(&frames_dir);
 	fs::create_dir(&frames_dir);
 	verbose!("Created frames directory.");
+
+	let output = parse_output(opt.input.clone(), &opt.output, &file_name)?;
+	verbose!("Output: {}", &output.display());
 
 	println!("============[ffmpeg]============");
 	let ffmpeg_stderr = ffmpeg_command(&opt.input, &frames_dir)?;
 	let fps = if let Some(f) = opt.fps { f } else { parse_fps(&ffmpeg_stderr)? };
 	println!("============[gifski]============");
-	gifski_command(opt.quality, fps, &frames_dir)?;
+	gifski_command(opt.quality, fps, &frames_dir, output)?;
 	println!("============[Cleaning Up]============");
 	fs::remove_dir_all(&frames_dir);
 	verbose!("Deleted frames directory: {}.", if frames_dir.exists() { "failed" } else { "success" });
 	println!("============[Complete!]============");
 
 	Ok(())
-}
-
-fn parse_fps(ffmpeg_stderr: &String) -> Result<f32> {
-	let re = Regex::new(r"(\d+(\.\d+)?)\s(fps)").unwrap();
-	let video_fps = re.captures(ffmpeg_stderr).unwrap()[1].parse()?;
-	verbose!("Original Video FPS: {}", &video_fps);
-	Ok(video_fps)
 }
 
 /// ffmpeg -i video.mp4 frame%04d.png
@@ -106,7 +105,7 @@ fn ffmpeg_command(input: &PathBuf, frames_dir: &PathBuf) -> Result<String> {
 }
 
 /// gifski -o file.gif frame*.png
-fn gifski_command(mut quality: u32, mut frames: f32, frames_dir: &PathBuf) -> Result<()> {
+fn gifski_command(mut quality: u32, mut frames: f32, frames_dir: &PathBuf, output: PathBuf) -> Result<()> {
 	println!("Running gifski. This might take a while.");
 	frames = frames.clamp(0.0, 50.0);
 	quality = quality.clamp(0, 100);
@@ -115,7 +114,7 @@ fn gifski_command(mut quality: u32, mut frames: f32, frames_dir: &PathBuf) -> Re
 	let command = Command::new("gifski")
 		.arg("--fps").arg(frames.to_string())
 		.arg("--quality").arg(quality.to_string())
-		.arg("-o").arg("./output.gif")
+		.arg("-o").arg(output.into_os_string())
 		.arg(format!("{}/frame*.png", &frames_dir.display()))
 		.output()
 		.expect("Failed to run the gifski command. Make sure you have gifski and it is accessible.");
@@ -125,6 +124,41 @@ fn gifski_command(mut quality: u32, mut frames: f32, frames_dir: &PathBuf) -> Re
 	if !command.status.success() { anyhow::bail!("Command executed with failing error code: {:#?}", command.status.code().unwrap()); }
 	println!("gifski complete");
 	Ok(())
+}
+
+fn parse_fps(ffmpeg_stderr: &String) -> Result<f32> {
+	let re = Regex::new(r"(\d+(\.\d+)?)\s(fps)").unwrap();
+	let video_fps = re.captures(ffmpeg_stderr).unwrap()[1].parse()?;
+	verbose!("Original Video FPS: {}", &video_fps);
+	Ok(video_fps)
+}
+
+fn parse_output(input: PathBuf, output: &Option<OsString>, file_name: &OsStr) -> Result<PathBuf> {
+	let mut curr = input.parent().unwrap_or(&input).to_owned();
+	return if let Some(s) = output {
+		if s.clone().to_string_lossy().contains('/') {
+			// ./some/path.gif
+			Ok(PathBuf::from(s))
+		} else {
+			if PathBuf::from(&s).extension().is_some() {
+				// output.gif
+				curr.push(s);
+				Ok(curr)
+			} else {
+				// output
+				curr.push(s);
+				curr.set_extension("gif");
+				Ok(curr)
+			}
+		}
+	} else {
+		// none
+		let mut name = file_name.to_os_string();
+		name.push("-gifski");
+		curr.push(name);
+		curr.set_extension("gif");
+		Ok(curr)
+	}
 }
 
 #[macro_export]

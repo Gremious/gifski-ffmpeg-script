@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="Run" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
-    <option name="command" value="run --package gifski_ffmpeg_script --bin script ./input.mp4 ./output.mp4 --quality 95 -v" />
+    <option name="command" value="run --package gifski_ffmpeg_script --bin script ./input.mp4 --quality 95 -v" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$/src" />
     <option name="channel" value="DEFAULT" />
     <option name="allFeatures" value="false" />
