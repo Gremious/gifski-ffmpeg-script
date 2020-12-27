@@ -33,26 +33,42 @@ lazy_static! {
     static ref VERBOSE: RwLock<bool> = RwLock::new(false);
 }
 
+/// Converts a video to frames using your local ffmpeg, then, runs gifski to convert the frames to a gif.
+///
+/// This script runs
+///
+/// ffmpeg -i <INPUT> frame%04d.png <TEMP>/frames
+///
+/// followed by
+///
+/// gifski --fps <fps> --quality <quality> -o <OUTPUT> <TEMP>/frames/frame*.png
+///
+/// then, deletes the <TEMP>/frames directory
 #[derive(StructOpt, Debug)]
-#[structopt(name = "basic")]
+#[structopt(name = "gifski + ffmpeg script")]
 struct Opt {
+	/// File to process.
+	///
+	/// A path to the video e.g. "./input.mp4" or "C:/videos/input.mp4"
+	#[structopt(name = "INPUT", parse(from_os_str))]
+	input: PathBuf,
+
+	/// Name or location of output file
+	///
+	/// "C:/videos/output.gif" will create output.gif in the specified directory where as
+	/// "output" will create output.gif in the same directory as <INPUT>
+	#[structopt(name = "OUTPUT", parse(from_os_str))]
+	output: Option<OsString>,
+
 	/// Verbose mode.
 	#[structopt(short, long)]
 	verbose: bool,
 
-	/// File to process.
-	#[structopt(name = "INPUT", parse(from_os_str))]
-	input: PathBuf,
-
-	/// Name of output file.
-	#[structopt(name = "OUTPUT", parse(from_os_str))]
-	output: Option<OsString>,
-
-	/// Quality for gifski.
+	/// Quality passed to gifski.
 	#[structopt(short, long, default_value = "100")]
 	quality: u32,
 
-	/// fps for gifski.
+	/// Fps passed to gifski. Clamps to a max of 50 [default: the fps of the input video]
 	#[structopt(short, long)]
 	fps: Option<f32>,
 }

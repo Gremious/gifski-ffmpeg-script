@@ -1,6 +1,6 @@
 [package]
 name = "gifski_ffmpeg_script"
-version = "0.0.1"
+version = "1.0.0"
 authors = ["gremious <gremious@protonmail.com>"]
 description = "A `cargo generate` template for quick-starting a rust-script crate"
 keywords = ["template", "script"]
