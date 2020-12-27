@@ -59,28 +59,29 @@ fn main() -> Result<()> {
 	let file_name = opt.input.file_stem().expect("No input file specified.");
 	verbose!("input: {}", &opt.input.display());
 	verbose!("output: {}", if let Some(o) = &opt.output { o.clone() } else { format!("No output specified, using {:?}", file_name) });
-	let mut frames_dir = opt.input.clone();
-	frames_dir.pop();
+	let mut frames_dir = std::env::temp_dir();
 	frames_dir.push(PathBuf::from("frames"));
-	verbose!("frames dir: {}", &frames_dir.display());
+	verbose!("Frames directory: {}", &frames_dir.display());
 
+	fs::remove_dir_all(&frames_dir);
 	fs::create_dir(&frames_dir);
-	verbose!("Created the frames dir");
+	verbose!("Created frames directory.");
 
-	println!("==============================");
+	println!("============[ffmpeg]============");
 	let ffmpeg_stderr = ffmpeg_command(&opt.input, &frames_dir)?;
 	let fps = if let Some(f) = opt.fps { f } else { parse_fps(&ffmpeg_stderr)? };
-	println!("==============================");
+	println!("============[gifski]============");
 	gifski_command(opt.quality, fps, &frames_dir)?;
-	println!("==============================");
+	println!("============[Cleaning Up]============");
+	fs::remove_dir_all(&frames_dir);
+	verbose!("Deleted frames directory: {}.", if frames_dir.exists() { "failed" } else { "success" });
+	println!("============[Complete!]============");
 
 	Ok(())
 }
 
 fn parse_fps(ffmpeg_stderr: &String) -> Result<f32> {
 	let re = Regex::new(r"(\d+(\.\d+)?)\s(fps)").unwrap();
-	log::debug!("{:#?}", re.captures(ffmpeg_stderr));
-
 	let video_fps = re.captures(ffmpeg_stderr).unwrap()[1].parse()?;
 	verbose!("Original Video FPS: {}", &video_fps);
 	Ok(video_fps)
@@ -100,18 +101,18 @@ fn ffmpeg_command(input: &PathBuf, frames_dir: &PathBuf) -> Result<String> {
 	verbose!("stderr: {}", &stderr);
 
 	if !command.status.success() { anyhow::bail!("Command executed with failing error code: {:#?}", command.status.code().unwrap()); }
-	log::info!("Frame conversion complete");
+	println!("Frame conversion complete");
 	Ok(stderr.to_string())
 }
 
 /// gifski -o file.gif frame*.png
 fn gifski_command(mut quality: u32, mut frames: f32, frames_dir: &PathBuf) -> Result<()> {
-	log::info!("Running gifski. This might take a while.");
+	println!("Running gifski. This might take a while.");
 	frames = frames.clamp(0.0, 50.0);
 	quality = quality.clamp(0, 100);
-	log::info!("fps: {}, quality: {}", &frames, &quality);
+	println!("fps: {}, quality: {}", &frames, &quality);
 
-	let command = Command::new("./gifski.exe")
+	let command = Command::new("gifski")
 		.arg("--fps").arg(frames.to_string())
 		.arg("--quality").arg(quality.to_string())
 		.arg("-o").arg("./output.gif")
@@ -122,7 +123,7 @@ fn gifski_command(mut quality: u32, mut frames: f32, frames_dir: &PathBuf) -> Re
 	verbose!("stdout: {}", String::from_utf8_lossy(&command.stdout));
 	verbose!("stderr: {}", String::from_utf8_lossy(&command.stderr));
 	if !command.status.success() { anyhow::bail!("Command executed with failing error code: {:#?}", command.status.code().unwrap()); }
-	log::info!("gifski complete");
+	println!("gifski complete");
 	Ok(())
 }
 
