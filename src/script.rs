@@ -49,7 +49,7 @@ struct Opt {
 
 	/// fps for gifski.
 	#[structopt(short, long)]
-	fps: Option<u32>,
+	fps: Option<f32>,
 }
 
 fn main() -> Result<()> {
@@ -77,8 +77,10 @@ fn main() -> Result<()> {
 	Ok(())
 }
 
-fn parse_fps(ffmpeg_stderr: &String) -> Result<u32> {
+fn parse_fps(ffmpeg_stderr: &String) -> Result<f32> {
 	let re = Regex::new(r"(\d+(\.\d+)?)\s(fps)").unwrap();
+	log::debug!("{:#?}", re.captures(ffmpeg_stderr));
+
 	let video_fps = re.captures(ffmpeg_stderr).unwrap()[1].parse()?;
 	verbose!("Original Video FPS: {}", &video_fps);
 	Ok(video_fps)
@@ -103,11 +105,11 @@ fn ffmpeg_command(input: &PathBuf, frames_dir: &PathBuf) -> Result<String> {
 }
 
 /// gifski -o file.gif frame*.png
-fn gifski_command(mut quality: u32, mut frames: u32, frames_dir: &PathBuf) -> Result<()> {
+fn gifski_command(mut quality: u32, mut frames: f32, frames_dir: &PathBuf) -> Result<()> {
 	log::info!("Running gifski. This might take a while.");
-	frames = frames.clamp(0, 50);
+	frames = frames.clamp(0.0, 50.0);
 	quality = quality.clamp(0, 100);
-	verbose!("fps: {}, quality: {}", &frames, &quality);
+	log::info!("fps: {}, quality: {}", &frames, &quality);
 
 	let command = Command::new("./gifski.exe")
 		.arg("--fps").arg(frames.to_string())
