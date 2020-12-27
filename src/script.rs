@@ -73,6 +73,7 @@ struct Opt {
 	fps: Option<f32>,
 }
 
+#[allow(unused_must_use)]
 fn main() -> Result<()> {
 	SimpleLogger::new().init().unwrap();
 	let opt: Opt = Opt::from_args();
@@ -85,8 +86,9 @@ fn main() -> Result<()> {
 	let mut frames_dir = std::env::temp_dir();
 	frames_dir.push(PathBuf::from("frames"));
 	verbose!("Frames directory: {}", &frames_dir.display());
-	fs::remove_dir_all(&frames_dir)?;
-	fs::create_dir(&frames_dir)?;
+
+	fs::remove_dir_all(&frames_dir);
+	fs::create_dir(&frames_dir);
 	verbose!("Created frames directory.");
 
 	let output = parse_output(opt.input.clone(), &opt.output, &file_name)?;
@@ -98,7 +100,7 @@ fn main() -> Result<()> {
 	println!("============[gifski]============");
 	gifski_command(opt.quality, fps, &frames_dir, output)?;
 	println!("============[Cleaning Up]============");
-	fs::remove_dir_all(&frames_dir)?;
+	fs::remove_dir_all(&frames_dir);
 	verbose!("Deleted frames directory: {}.", if frames_dir.exists() { "failed" } else { "success" });
 	println!("============[Complete!]============");
 
@@ -173,7 +175,7 @@ fn parse_output(input: PathBuf, output: &Option<OsString>, file_name: &OsStr) ->
 	} else {
 		// none
 		let mut name = file_name.to_os_string();
-		name.push("-gifski");
+		name.push("-gif");
 		curr.push(name);
 		curr.set_extension("gif");
 		Ok(curr)
