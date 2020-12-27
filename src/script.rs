@@ -99,10 +99,10 @@ fn main() -> Result<()> {
 	let fps = if let Some(f) = opt.fps { f } else { parse_fps(&ffmpeg_stderr)? };
 	println!("============[gifski]============");
 	gifski_command(opt.quality, fps, &frames_dir, output)?;
-	println!("============[Cleaning Up]============");
+	println!("==========[Cleaning Up]==========");
 	fs::remove_dir_all(&frames_dir);
 	verbose!("Deleted frames directory: {}.", if frames_dir.exists() { "failed" } else { "success" });
-	println!("============[Complete!]============");
+	println!("===========[Complete!]===========");
 
 	Ok(())
 }
