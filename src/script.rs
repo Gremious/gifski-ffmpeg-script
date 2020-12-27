@@ -5,7 +5,9 @@
 //! simple_logger = "1.11"
 //! anyhow = "1"
 //! lazy_static = "1"
+//! regex = "1"
 //! ```
+#![feature(clamp)]
 
 #![warn(
 clippy::all,
@@ -15,7 +17,9 @@ clippy::pedantic,
 use std::{fs, path::PathBuf, process::Command, sync::RwLock};
 use structopt::StructOpt;
 use simple_logger::SimpleLogger;
-use anyhow::{ Error, Result, bail, ensure };
+use anyhow::{Error, Result, bail, ensure};
+use regex::Regex;
+use std::borrow::Cow;
 
 #[macro_use]
 extern crate lazy_static;
@@ -44,17 +48,17 @@ struct Opt {
 	quality: u32,
 
 	/// fps for gifski.
-	#[structopt(short, long, default_value = "50")]
-	fps : u32,
+	#[structopt(short, long)]
+	fps: Option<u32>,
 }
 
 fn main() -> Result<()> {
 	SimpleLogger::new().init().unwrap();
 	let opt: Opt = Opt::from_args();
 	{ *VERBOSE.write().unwrap() = opt.verbose; }
-	let file_name =  opt.input.file_stem()?;
+	let file_name = opt.input.file_stem().expect("No input file specified.");
 	verbose!("input: {}", &opt.input.display());
-	verbose!("output: {}", if let Some(o) = &opt.output { o.display() } else { format!("No output specified, using {}", file_name) });
+	verbose!("output: {}", if let Some(o) = &opt.output { o.clone() } else { format!("No output specified, using {:?}", file_name) });
 	let mut frames_dir = opt.input.clone();
 	frames_dir.pop();
 	frames_dir.push(PathBuf::from("frames"));
@@ -64,16 +68,24 @@ fn main() -> Result<()> {
 	verbose!("Created the frames dir");
 
 	println!("==============================");
-	ffmpeg_command(&opt.input, &frames_dir);
+	let ffmpeg_stderr = ffmpeg_command(&opt.input, &frames_dir)?;
+	let fps = if let Some(f) = opt.fps { f } else { parse_fps(&ffmpeg_stderr)? };
 	println!("==============================");
-	gifski_command(opt.quality, &frames_dir);
+	gifski_command(opt.quality, fps, &frames_dir)?;
 	println!("==============================");
 
 	Ok(())
 }
 
+fn parse_fps(ffmpeg_stderr: &String) -> Result<u32> {
+	let re = Regex::new(r"(\d+(\.\d+)?)\s(fps)").unwrap();
+	let video_fps = re.captures(ffmpeg_stderr).unwrap()[1].parse()?;
+	verbose!("Original Video FPS: {}", &video_fps);
+	Ok(video_fps)
+}
+
 /// ffmpeg -i video.mp4 frame%04d.png
-fn ffmpeg_command(input: &PathBuf, frames_dir: &PathBuf) -> Result<()> {
+fn ffmpeg_command(input: &PathBuf, frames_dir: &PathBuf) -> Result<String> {
 	println!("Splitting video into frames.");
 	let command = Command::new("ffmpeg")
 		.arg("-i").arg(format!("{}", &input.display()))
@@ -82,17 +94,23 @@ fn ffmpeg_command(input: &PathBuf, frames_dir: &PathBuf) -> Result<()> {
 		.expect("Failed to run the ffmpeg command. Make sure you have ffmpeg and it is accessible.");
 
 	verbose!("stdout: {}", String::from_utf8_lossy(&command.stdout));
-	verbose!("stderr: {}", String::from_utf8_lossy(&command.stderr));
+	let stderr = String::from_utf8_lossy(&command.stderr);
+	verbose!("stderr: {}", &stderr);
+
 	if !command.status.success() { anyhow::bail!("Command executed with failing error code: {:#?}", command.status.code().unwrap()); }
 	log::info!("Frame conversion complete");
-	Ok(())
+	Ok(stderr.to_string())
 }
 
 /// gifski -o file.gif frame*.png
-fn gifski_command(quality: u32, frames_dir: &PathBuf) -> Result<()> {
+fn gifski_command(mut quality: u32, mut frames: u32, frames_dir: &PathBuf) -> Result<()> {
 	log::info!("Running gifski. This might take a while.");
+	frames = frames.clamp(0, 50);
+	quality = quality.clamp(0, 100);
+	verbose!("fps: {}, quality: {}", &frames, &quality);
+
 	let command = Command::new("./gifski.exe")
-		.arg("--fps").arg("33")
+		.arg("--fps").arg(frames.to_string())
 		.arg("--quality").arg(quality.to_string())
 		.arg("-o").arg("./output.gif")
 		.arg(format!("{}/frame*.png", &frames_dir.display()))
@@ -108,7 +126,11 @@ fn gifski_command(quality: u32, frames_dir: &PathBuf) -> Result<()> {
 
 #[macro_export]
 macro_rules! verbose {
-    ($target:literal, $($arg:tt)+) => {
+    ($target:literal) => {
+   		{ if *VERBOSE.read().unwrap() { log::info!($target); } }
+    };
+
+     ($target:literal, $($arg:tt)+) => {
    		{ if *VERBOSE.read().unwrap() { log::info!($target, $($arg)+); } }
     };
 }
